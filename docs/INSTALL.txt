@@ -1,0 +1,19 @@
+Pixovolt 1.1 — Apple Silicon / macOS 13+
+
+한국어
+1. Pixovolt.app을 응용 프로그램 폴더로 드래그하세요.
+2. 앱을 실행하고 메뉴바에서 제어 창을 여세요.
+3. 외부 모니터를 선택하고 원하는 입력을 누르세요. LG 모니터는 LG 대체 방식을 확인하세요.
+4. 외부 화면 끄기(Mac 연결 해제)는 내장 화면이 켜져 있을 때 사용하세요.
+5. 다시 연결 버튼으로 복구하세요. 복구 실패 시 케이블을 분리 후 다시 연결하세요.
+다른 입력으로 전환하면 현재 Mac의 화면이 끊길 수 있습니다. 물리 전원 끄기와 연결 해제는 다릅니다.
+이 앱은 로컬 ad-hoc 서명이며 Apple 공증이 없습니다.
+
+English
+1. Drag Pixovolt.app into Applications, then launch it.
+2. Open the control window from the menu bar and select an external monitor.
+3. Choose an input. For LG monitors, check the alternate LG input mode.
+4. Software-disconnect only while the MacBook built-in screen is active.
+5. Reconnect using the recovery button. If recovery fails, unplug and reconnect the cable.
+Input switching can interrupt the Mac's video connection. Software disconnect does not physically power off a monitor.
+This build is ad-hoc signed and is not notarized by Apple.

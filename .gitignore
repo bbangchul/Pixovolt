@@ -1,0 +1,10 @@
+.DS_Store
+work/
+outputs/
+com.apple.DeveloperTools/
+__pycache__/
+*.py[cod]
+*.xcuserstate
+xcuserdata/
+.env
+.env.*
