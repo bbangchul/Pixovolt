@@ -48,3 +48,9 @@
 - EDID/discovery, command success/error, and readback never alter the support state. No automatic probing or fallback writes were added.
 - State roundtrip, mode/monitor isolation, reset to unknown and routing tests pass. Build/signature/DMG verification passed.
 - Physical DDC power-off and disconnect were not executed during this update; hardware verification remains pending.
+
+## 1.1.9 reconnect label
+
+- A single saved reconnect target uses the generic “모니터 다시 연결” label. Multiple targets retain monitor names for selection.
+- Names come from local saved device information, not a bundled default model. Recovery target and behavior are unchanged.
+- Release build, signature and DMG verification passed. No physical display commands were executed during verification.

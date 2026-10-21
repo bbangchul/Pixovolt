@@ -204,7 +204,7 @@ struct ControlPanel: View {
                 Button("오픈소스 라이선스") { model.showLicense() }.buttonStyle(.link)
                 Spacer()
             }
-            Text("v1.1.8 · Apple Silicon · 실제 모니터 호환성 확인 필요")
+            Text("v1.1.9 · Apple Silicon · 실제 모니터 호환성 확인 필요")
                 .font(.system(size: 10)).foregroundStyle(.tertiary)
         }
         .padding(18)
@@ -244,7 +244,7 @@ struct ControlPanel: View {
                 }
             }
             ForEach(model.disconnectedTargets.keys.sorted(), id: \.self) { target in
-                Button("\(model.disconnectedTargets[target] ?? "외부 화면") 다시 연결") { model.reconnect(target) }
+                Button(model.disconnectedTargets.count == 1 ? "모니터 다시 연결" : "모니터 다시 연결 · \(model.disconnectedTargets[target] ?? "외부 화면")") { model.reconnect(target) }
                     .disabled(model.busy)
             }
             Text("내장 화면이 켜져 있을 때만 해제합니다. 창이 노트북으로 이동하며 다른 본체로 입력이 전환될 수 있습니다.")
