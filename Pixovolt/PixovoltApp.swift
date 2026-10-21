@@ -1,34 +1,53 @@
+import AppKit
 import SwiftUI
 import ServiceManagement
 
 @main struct PixovoltApp: App {
-    @StateObject private var model = AppModel()
+    @NSApplicationDelegateAdaptor(PixovoltDelegate.self) private var delegate
     var body: some Scene {
-        Window("Pixovolt", id: "control") {
-            ControlPanel(model: model)
-        }
-        .windowResizability(.contentSize)
-        MenuBarExtra("Pixovolt", systemImage: "display.2") {
-            ControlMenu()
-        }
+        Settings { EmptyView() }
     }
 }
 
-struct ControlMenu: View {
-    @Environment(\.openWindow) private var openWindow
-    var body: some View {
-        Button("제어 창 열기") {
-            openWindow(id: "control")
-            NSApp.activate(ignoringOtherApps: true)
+@MainActor final class PixovoltDelegate: NSObject, NSApplicationDelegate {
+    private var item: NSStatusItem?
+    private let popover = NSPopover()
+    private lazy var model = AppModel()
+
+    func applicationDidFinishLaunching(_ notification: Notification) {
+        let item = NSStatusBar.system.statusItem(withLength: NSStatusItem.squareLength)
+        self.item = item
+        if let button = item.button {
+            button.image = NSImage(systemSymbolName: "display.2", accessibilityDescription: "Pixovolt 제어창 열기")
+            button.image?.isTemplate = true
+            button.toolTip = "Pixovolt 제어창 열기"
+            button.target = self
+            button.action = #selector(togglePopover)
         }
-        Divider()
-        Button("Pixovolt 종료") { NSApp.terminate(nil) }
-            .keyboardShortcut("q", modifiers: .command)
+        popover.behavior = .transient
+        popover.contentSize = NSSize(width: 390, height: 690)
+        popover.contentViewController = NSHostingController(rootView: ControlPanel(model: model) { [weak self] height in
+            self?.popover.contentSize = NSSize(width: 390, height: height)
+        })
+        // Explicitly requested opening, including UI verification, without opening a standalone window.
+        if CommandLine.arguments.contains("--show-controls") {
+            DispatchQueue.main.async { [weak self] in self?.showPopover() }
+        }
+    }
+    @objc private func togglePopover() {
+        if popover.isShown { popover.performClose(nil) }
+        else { showPopover() }
+    }
+    private func showPopover() {
+        guard let button = item?.button else { return }
+        popover.show(relativeTo: button.bounds, of: button, preferredEdge: .minY)
+        NSApp.activate(ignoringOtherApps: true)
     }
 }
 
 struct ControlPanel: View {
     @ObservedObject var model: AppModel
+    var onHeightChange: (CGFloat) -> Void
     @State private var showSettings = false
     @State private var confirmScreenOff = false
     @State private var confirmDisconnect = false
@@ -150,7 +169,7 @@ struct ControlPanel: View {
                 Button("오픈소스 라이선스") { model.showLicense() }.buttonStyle(.link)
                 Spacer()
             }
-            Text("v1.1.4 · Apple Silicon · 실제 모니터 호환성 확인 필요")
+            Text("v1.1.5 · Apple Silicon · 실제 모니터 호환성 확인 필요")
                 .font(.system(size: 10)).foregroundStyle(.tertiary)
         }
         .padding(18)
@@ -158,8 +177,26 @@ struct ControlPanel: View {
         }
         Divider()
         VStack(alignment: .leading, spacing: 8) {
-            Button("외부 화면 끄기 (Mac 연결 해제)") { confirmDisconnect = true }
-                .disabled(model.busy || !model.hasSelectedMonitor)
+            if confirmDisconnect {
+                VStack(alignment: .leading, spacing: 8) {
+                    Text("외부 화면 연결을 해제할까요?").font(.subheadline.bold())
+                    Text("물리 전원 끄기와 다릅니다. 창은 내장 화면으로 이동합니다. 복구 실패 시 케이블을 다시 연결하세요.")
+                        .font(.caption).foregroundStyle(.secondary)
+                    HStack {
+                        Button("취소") { confirmDisconnect = false }
+                        Spacer()
+                        Button("연결 해제 실행", role: .destructive) {
+                            confirmDisconnect = false
+                            model.disconnectSelected()
+                        }.disabled(model.busy || !model.hasSelectedMonitor)
+                    }
+                }.padding(10).background(.orange.opacity(0.08), in: RoundedRectangle(cornerRadius: 8))
+            } else {
+                Button("외부 화면 끄기 (Mac 연결 해제)") {
+                    confirmScreenOff = false
+                    confirmDisconnect = true
+                }.disabled(model.busy || !model.hasSelectedMonitor)
+            }
             ForEach(model.disconnectedTargets.keys.sorted(), id: \.self) { target in
                 Button("\(model.disconnectedTargets[target] ?? "외부 화면") 다시 연결") { model.reconnect(target) }
                     .disabled(model.busy)
@@ -171,29 +208,41 @@ struct ControlPanel: View {
                 ForEach(MonitorPower.offModes) { Text($0.label).tag($0) }
             }.disabled(model.busy)
             HStack {
-                Button { confirmScreenOff = true } label: { Label("기존 DDC 전원 명령 전송", systemImage: "power") }
+                Button {
+                    confirmDisconnect = false
+                    confirmScreenOff = true
+                } label: { Label("기존 DDC 전원 명령 전송", systemImage: "power") }
                     .disabled(model.busy || !model.hasSelectedMonitor)
                 Button("DDC 켜기 시도") { model.setPower(.on) }
                     .disabled(model.busy || (model.sleepingTargetID == nil && !model.hasSelectedMonitor))
                 Spacer()
             }
-            Text("이 모니터에서는 DDC 끄기 2/3/4/5가 작동하지 않는다고 보고됐습니다. 위의 Mac 연결 해제 버튼을 사용하세요.")
+            if confirmScreenOff {
+                VStack(alignment: .leading, spacing: 8) {
+                    Text("선택 방식: \(model.offMode.label)").font(.caption.bold())
+                    Text("다시 켤 때 모니터 물리 버튼이 필요할 수 있습니다.").font(.caption)
+                    HStack {
+                        Button("전원 명령 취소") { confirmScreenOff = false }
+                        Spacer()
+                        Button("전원 명령 실행", role: .destructive) {
+                            confirmScreenOff = false
+                            model.setPower(model.offMode)
+                        }.disabled(model.busy || !model.hasSelectedMonitor)
+                    }
+                }.padding(10).background(.orange.opacity(0.08), in: RoundedRectangle(cornerRadius: 8))
+            }
+            Text("DDC 전원 제어는 일부 모니터에서 지원되지 않습니다. 작동하지 않으면 위의 Mac 연결 해제를 사용하세요.")
                 .font(.caption).foregroundStyle(.secondary)
             }
         }.padding(14)
         }
         .frame(width: 390, height: showSettings ? 740 : 690)
-        .alert("외부 화면을 이 Mac에서 연결 해제할까요?", isPresented: $confirmDisconnect) {
-            Button("연결 해제", role: .destructive) { model.disconnectSelected() }
-            Button("취소", role: .cancel) { }
-        } message: {
-            Text("모니터 물리 전원 끄기와 다릅니다. 창은 내장 화면으로 이동합니다. 앱에서 다시 연결할 수 있고 복구 실패 시 케이블을 분리 후 연결하세요.")
+        .onChange(of: showSettings) { expanded in
+            onHeightChange(expanded ? 740 : 690)
         }
-        .confirmationDialog("선택한 외부 모니터 화면을 끌까요?", isPresented: $confirmScreenOff) {
-            Button("화면 끄기", role: .destructive) { model.setPower(model.offMode) }
-            Button("취소", role: .cancel) { }
-        } message: {
-            Text("선택 방식: \(model.offMode.label). 다시 켤 때 모니터 물리 버튼이 필요할 수 있습니다. 앱 종료는 화면을 끄지 않습니다.")
+        .onDisappear {
+            confirmDisconnect = false
+            confirmScreenOff = false
         }
         .onAppear { model.updateLoginStatus(); model.refresh() }
     }

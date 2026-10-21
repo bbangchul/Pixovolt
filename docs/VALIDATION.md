@@ -16,3 +16,12 @@
 - Global keyboard conflicts, login relaunch, sleep/wake and other Mac/monitor combinations require manual validation.
 - No Developer ID signing or Apple notarization. No Intel or App Store compatibility claim.
 - Korean application UI; README provided in Korean and English.
+
+## 1.1.5 menu-bar popover / 메뉴바 팝업
+
+- Standalone control window replaced with an NSStatusItem-anchored NSPopover.
+- Disconnect/DDC power confirmation is inline; no separate alert or confirmation dialog.
+- Application state retains operation results across popover dismissal.
+- Release arm64 build, app signature and DMG checksum validation passed.
+- User confirmed the installed menu-bar popover opens correctly on 2026-10-21.
+- Physical disconnect/power operations were not triggered as part of this UI update.

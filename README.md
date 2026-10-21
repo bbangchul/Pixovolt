@@ -8,13 +8,13 @@
 
 ## 한국어
 
-**Pixovolt**는 Apple Silicon Mac용 모니터 입력 전환·연결 관리 앱입니다. 메뉴바에서 제어 창을 열어 HDMI, DisplayPort, USB-C 입력을 전환하고 외부 화면을 이 Mac에서 연결 해제하거나 다시 연결할 수 있습니다.
+**Pixovolt**는 Apple Silicon Mac용 모니터 입력 전환·연결 관리 앱입니다. 메뉴바 아이콘을 눌러 내려오는 제어 팝업에서 HDMI, DisplayPort, USB-C 입력을 전환하고 외부 화면을 이 Mac에서 연결 해제하거나 다시 연결할 수 있습니다.
 
 ### 설치
 
 1. [최신 릴리스](https://github.com/bbangchul/Pixovolt/releases/latest)에서 `Pixovolt-1.1-arm64.dmg`를 내려받습니다.
 2. DMG를 열고 **Pixovolt.app**을 **응용 프로그램** 폴더로 드래그합니다.
-3. 앱을 실행합니다. 창을 닫았다면 메뉴바 아이콘 → **제어 창 열기**로 다시 엽니다.
+3. 앱을 실행합니다. 메뉴바 아이콘을 누르면 제어 팝업이 열립니다. 바깥을 누르면 닫히고 아이콘을 다시 누르면 열립니다.
 4. 모니터 OSD에서 **DDC/CI**를 켜고 대상 모니터와 입력을 선택합니다.
 
 이 빌드는 ad-hoc 서명이며 **Apple 공증이 없습니다**. macOS에서 실행을 차단하면 [Apple의 앱 안전하게 열기 안내](https://support.apple.com/102445)를 확인하세요.
@@ -29,7 +29,7 @@
 | 연결 해제·복구 | 이 Mac의 외부 영상 출력을 해제하고 다시 연결 |
 | 전역 단축키 | 기본 꺼짐. 활성화 시 기본 Control+Option+1~5, 조합·숫자 변경 가능 |
 | 로그인 자동 실행 | 앱 설정에서 등록·해제, 시스템 승인 상태 표시 |
-| 오류·진단 | 독립 제어 창에 최근 결과 고정 표시, DDC 읽기 진단·오류 복사 |
+| 오류·진단 | 제어 팝업에 최근 결과 고정 표시, DDC 읽기 진단·오류 복사 |
 
 앱 UI는 현재 한국어입니다.
 
@@ -84,13 +84,13 @@ m1ddc는 포함된 소스에서 빌드해 앱 내부에 서명·번들링합니�
 
 ## English
 
-**Pixovolt** is a monitor input-switching and display-connection utility for Apple Silicon Macs. Open its control window from the menu bar to switch HDMI, DisplayPort or USB-C inputs, or software-disconnect and reconnect an external display.
+**Pixovolt** is a monitor input-switching and display-connection utility for Apple Silicon Macs. Open its control popover by clicking the menu bar icon to switch HDMI, DisplayPort or USB-C inputs, or software-disconnect and reconnect an external display.
 
 ### Install
 
 1. Download `Pixovolt-1.1-arm64.dmg` from the [latest release](https://github.com/bbangchul/Pixovolt/releases/latest).
 2. Open the DMG and drag **Pixovolt.app** into **Applications**.
-3. Launch the app. To reopen its window, use the menu bar icon → **제어 창 열기** (Open control window).
+3. Launch the app. Click the menu bar icon to open the control popover. Click outside to dismiss it, then click the icon to reopen it.
 4. Enable **DDC/CI** in your monitor's OSD, select the monitor and choose an input.
 
 This build is ad-hoc signed and **not notarized by Apple**. If macOS blocks it, refer to [Apple's guidance on opening apps safely](https://support.apple.com/102445).
@@ -105,7 +105,7 @@ This build is ad-hoc signed and **not notarized by Apple**. If macOS blocks it, 
 | Disconnect/reconnect | Stop this Mac's video output to an external display and restore it |
 | Global shortcuts | Off by default; Control+Option+1–5 when enabled, with configurable modifiers and number keys |
 | Launch at login | Register/unregister through the app and view system approval status |
-| Diagnostics | Persistent result/error display, read-only DDC queries and copyable errors |
+| Diagnostics | Persistent result/error display in the popover, read-only DDC queries and copyable errors |
 
 The application UI is currently in Korean.
 
@@ -155,3 +155,9 @@ Quit and remove Monitor Switch, then install Pixovolt. Monitor selection, LG mod
 - [waydabber/m1ddc](https://github.com/waydabber/m1ddc): [MIT](Vendor/m1ddc/LICENSE); [pinned revision and local fixes](Vendor/UPSTREAM.md)
 - DMG build tools: [ds_store license](Vendor/ds_store-LICENSE), [mac_alias license](Vendor/mac_alias-LICENSE)
 - Display connection API references: [implementation notes](Vendor/DisplayConnection-NOTES.md)
+
+### 1.1.5 UI update / UI 변경
+
+메뉴바에 붙는 제어 팝업으로 복귀했습니다. 연결 해제·DDC 전원 명령의 확인은 팝업 내부의 실행/취소 버튼으로 처리하여 별도 확인창 때문에 팝업이 닫히는 문제를 피합니다. 최신 결과는 앱 상태에 남아 팝업을 다시 열어 확인할 수 있습니다.
+
+Controls now appear in a menu-bar popover instead of a standalone window. Disconnect and DDC power actions use inline confirmation buttons, avoiding focus changes to a separate alert. Results remain in application state after closing and reopening the popover.
