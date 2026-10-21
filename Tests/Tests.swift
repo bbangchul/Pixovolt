@@ -103,6 +103,37 @@ import Foundation
             try FileManager.default.setAttributes([.posixPermissions: 0o700], ofItemAtPath: url.path)
             return DDCService(executable: url)
         }
+        // Exercise the same profile-based service used by buttons and global shortcuts.
+        for method in ProfileMethod.allCases {
+            for (index, input) in InputSource.allCases.enumerated() {
+                let customValue = 300 + index
+                let userEdit = UserProfileOverride(method: method, inputValues: [input.rawValue: customValue])
+                let persisted = try JSONEncoder().encode([uuid: userEdit])
+                let reloaded = try JSONDecoder().decode([String: UserProfileOverride].self, from: persisted)
+                let chosen = ProfileResolver.resolve(identified, user: reloaded[uuid], legacyAlternate: method == .standard)
+                precondition(chosen.profile.method == method && chosen.profile.value(input) == customValue)
+                let other = ProfileResolver.resolve(twin, user: reloaded[twin.id])
+                precondition(other.profile.value(input) == input.value(alternate: true))
+                let feature = method == .standard ? "input" : "input-alt"
+                let command = try fixture("profile-\(method.rawValue)-\(index)", "[ \"$*\" = 'display uuid=\(uuid) set \(feature) \(customValue)' ] || exit 1\necho 'Writing \(customValue)'\n")
+                try await command.switchInput(uuid: uuid, input: input, profile: chosen.profile)
+            }
+        }
+        let boundary = ControlProfile(method: .standard, inputValues: ["HDMI 1": 65535, "HDMI 2": 0])
+        let maxArguments = try boundary.arguments(uuid: uuid, input: .hdmi1)
+        precondition(maxArguments.last == "65535")
+        let zeroArguments = try boundary.arguments(uuid: uuid, input: .hdmi2)
+        precondition(zeroArguments.last == "0")
+        for value in [-1, 65536] {
+            let invalid = ControlProfile(method: .standard, inputValues: ["HDMI 1": value])
+            do { _ = try invalid.arguments(uuid: uuid, input: .hdmi1); fatalError("invalid profile value accepted") } catch {}
+        }
+        do { _ = try boundary.arguments(uuid: "bad", input: .hdmi1); fatalError("invalid profile UUID accepted") } catch {}
+        let wrongProfileOutput = try fixture("wrong-profile-output", "echo 'Writing 3333'\n")
+        do {
+            try await wrongProfileOutput.switchInput(uuid: uuid, input: .hdmi1, profile: ControlProfile(method: .lgAlternate, inputValues: ["HDMI 1": 333]))
+            fatalError("wrong custom value response accepted")
+        } catch {}
         let success = try fixture("success", "echo \"Writing 17\"\n")
         try await success.switchInput(uuid: uuid, input: .hdmi1, alternate: false)
         let misleading = try fixture("misleading", "echo 'Writing 170'\n")
@@ -138,6 +169,6 @@ import Foundation
         catch { precondition(Date().timeIntervalSince(start) < 3) }
         let missing = DDCService(executable: temp.appendingPathComponent("missing"))
         do { _ = try await missing.run([]); fatalError("missing accepted") } catch {}
-        print("PASS: EDID validation/identity/naming/duplicate labels/profile precedence/per-device persistence/JSON schema, connection target/last-screen guard/built-in guard/duplicate rejection/fresh-ID recovery/ambiguous recovery rejection, power values 1-5, unchanged-on verification, standby verification, unavailable readback, LG default selection, power off/on arguments and execution, power failure, UUID validation, diagnostics, strict write result, parser, all 10 input mappings, UUID arguments, command success/failure, empty list, timeout termination, missing helper")
+        print("PASS: profile-based standard/LG execution for all five inputs, custom values, persisted profile reload and monitor isolation, argument validation and strict custom response, EDID validation/identity/naming/duplicate labels/profile precedence/per-device persistence/JSON schema, connection target/last-screen guard/built-in guard/duplicate rejection/fresh-ID recovery/ambiguous recovery rejection, power values 1-5, unchanged-on verification, standby verification, unavailable readback, LG default selection, power off/on arguments and execution, power failure, UUID validation, diagnostics, strict write result, parser, all 10 input mappings, UUID arguments, command success/failure, empty list, timeout termination, missing helper")
     }
 }

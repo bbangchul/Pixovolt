@@ -25,14 +25,21 @@ import Carbon
     @Published var profileValidationError: String?
     var selectedMonitor: Monitor? { monitors.first { $0.id == selectedID } }
     func displayLabel(_ monitor: Monitor) -> String { DisplayNames.labels(monitors)[monitor.id] ?? monitor.displayName }
-    var preparedProfile: ResolvedProfile? {
+    var activeProfile: ResolvedProfile? {
         guard let selectedMonitor else { return nil }
         return ProfileResolver.resolve(selectedMonitor, user: profileOverrides[selectedID], legacyAlternate: alternateIDs[selectedID])
     }
     var profileChoice: String {
-        get { profileOverrides[selectedID]?.method?.rawValue ?? "automatic" }
+        get {
+            if let method = profileOverrides[selectedID]?.method { return method.rawValue }
+            if let legacy = alternateIDs[selectedID] { return (legacy ? ProfileMethod.lgAlternate : .standard).rawValue }
+            return "automatic"
+        }
         set {
-            guard selectedMonitor != nil else { return }
+            guard !busy, selectedMonitor != nil else { return }
+            guard newValue != profileChoice else { return }
+            // Automatic selection explicitly clears the legacy manual method too.
+            alternateIDs.removeValue(forKey: selectedID)
             var edit = profileOverrides[selectedID] ?? UserProfileOverride()
             edit.method = ProfileMethod(rawValue: newValue)
             // Values belong to a protocol. Explicit method changes discard old custom port values.
@@ -41,20 +48,22 @@ import Carbon
             profileValidationError = nil
         }
     }
-    func setPreparedValue(_ input: InputSource, text: String) {
-        guard selectedMonitor != nil else { return }
+    func setProfileValue(_ input: InputSource, text: String) {
+        guard !busy, selectedMonitor != nil else { return }
         guard let value = Int(text), (0...65535).contains(value) else {
             profileValidationError = "입력 값은 0~65535의 정수여야 합니다. 저장하지 않았습니다."
             return
         }
         var edit = profileOverrides[selectedID] ?? UserProfileOverride()
-        if edit.method == nil { edit.method = preparedProfile?.profile.method }
+        if edit.method == nil { edit.method = activeProfile?.profile.method }
         edit.inputValues[input.rawValue] = value
         profileOverrides[selectedID] = edit
         profileValidationError = nil
     }
-    func resetPreparedProfile() {
+    func resetProfile() {
+        guard !busy, selectedMonitor != nil else { return }
         profileOverrides.removeValue(forKey: selectedID)
+        alternateIDs.removeValue(forKey: selectedID)
         profileValidationError = nil
     }
     @Published var busy = false
@@ -77,8 +86,8 @@ import Carbon
     private var observers: [NSObjectProtocol] = []
     private var refreshPending = false
     var alternate: Bool {
-        get { alternateIDs[selectedID] ?? monitors.first(where: { $0.id == selectedID })?.prefersLGAlternate ?? false }
-        set { alternateIDs[selectedID] = newValue }
+        get { activeProfile?.profile.method == .lgAlternate }
+        set { profileChoice = (newValue ? ProfileMethod.lgAlternate : .standard).rawValue }
     }
     static let keyCodes: [UInt32] = [18, 19, 20, 21, 23, 22, 26, 28, 25]
     static let modifierNames = ["⌃⌥ (Control + Option)", "⌘⌥ (Command + Option)", "⌃⌘ (Control + Command)"]
@@ -156,17 +165,19 @@ import Carbon
             error = "선택한 모니터가 연결되어 있지 않습니다. 모니터 목록에서 대상을 선택하세요."
             return
         }
-        let target = selectedID, useAlternate = alternate
+        guard let profile = activeProfile?.profile else { return }
+        // Capture the target and complete profile before asynchronous execution.
+        let target = selectedID, useAlternate = profile.method == .lgAlternate
         busy = true
         error = nil
         lastInput = input
         lastTargetID = target
         lastUsedAlternate = useAlternate
-        lastCommand = "\(input.rawValue) · \(useAlternate ? "LG input-alt" : "일반 input") · 값 \(input.value(alternate: useAlternate))"
+        lastCommand = "\(input.rawValue) · \(useAlternate ? "LG input-alt" : "일반 input") · 값 \(profile.value(input))"
         Task {
             defer { finishOperation() }
             do {
-                try await service.switchInput(uuid: target, input: input, alternate: useAlternate)
+                try await service.switchInput(uuid: target, input: input, profile: profile)
                 message = "\(lastCommand) 전달됨. 화면 전환은 확인되지 않았습니다. 변화가 없으면 전환 방식을 바꿔 다시 시도하세요."
             } catch { self.error = "\(error.localizedDescription)\n모니터 OSD에서 DDC/CI를 켜고 케이블·허브 연결을 확인하세요." }
         }

@@ -72,7 +72,7 @@ struct Monitor: Identifiable, Equatable {
         if let product = resolvedProductID, product != 0 { return String(format: "%@ · 제품 %04X", manufacturerName, product) }
         return manufacturerName == "알 수 없는 제조사" ? "외부 모니터" : "\(manufacturerName) 모니터"
     }
-    // Retain the existing execution default until profile-based sending is implemented separately.
+    // Kept for legacy display-name compatibility tests.
     var prefersLGAlternate: Bool { name.uppercased().hasPrefix("LG ") || name.uppercased() == "LG" }
     static func cleanName(_ text: String?) -> String? {
         guard let text else { return nil }
@@ -103,6 +103,12 @@ struct ControlProfile: Equatable {
     let method: ProfileMethod
     let inputValues: [String: Int]
     func value(_ input: InputSource) -> Int { inputValues[input.rawValue] ?? input.value(alternate: method == .lgAlternate) }
+    func arguments(uuid: String, input: InputSource) throws -> [String] {
+        guard UUID(uuidString: uuid) != nil else { throw DDCError.message("유효하지 않은 모니터 UUID입니다.") }
+        let number = value(input)
+        guard (0...65535).contains(number) else { throw DDCError.message("입력 값은 0~65535의 정수여야 합니다.") }
+        return ["display", "uuid=\(uuid)", "set", method == .lgAlternate ? "input-alt" : "input", String(number)]
+    }
     static func defaults(_ method: ProfileMethod) -> ControlProfile {
         ControlProfile(method: method, inputValues: Dictionary(uniqueKeysWithValues: InputSource.allCases.map { ($0.rawValue, $0.value(alternate: method == .lgAlternate)) }))
     }
@@ -308,9 +314,12 @@ actor DDCService {
         return PowerVerification.parse(read)
     }
     func switchInput(uuid: String, input: InputSource, alternate: Bool) throws {
-        guard UUID(uuidString: uuid) != nil else { throw DDCError.message("유효하지 않은 모니터 UUID입니다.") }
-        let result = try run(input.arguments(uuid: uuid, alternate: alternate))
-        guard result.status == 0, result.output == "Writing \(input.value(alternate: alternate))" else {
+        try switchInput(uuid: uuid, input: input, profile: .defaults(alternate ? .lgAlternate : .standard))
+    }
+    func switchInput(uuid: String, input: InputSource, profile: ControlProfile) throws {
+        let arguments = try profile.arguments(uuid: uuid, input: input)
+        let result = try run(arguments)
+        guard result.status == 0, result.output == "Writing \(profile.value(input))" else {
             throw DDCError.message(result.output.isEmpty ? "입력 전환 명령이 실패했습니다." : result.output)
         }
     }

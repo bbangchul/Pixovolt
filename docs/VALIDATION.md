@@ -33,3 +33,10 @@
 - JSON discovery with no connected monitor is represented as a successful empty display list. Legacy CLI text output is preserved.
 - New profile editing remains preparation-only: existing input/power/disconnect execution paths are not wired to it.
 - No automatic input, power or connection mutations were issued.
+
+## 1.1.7 profile-based input switching
+
+- Input buttons and shortcuts share the selected monitor's resolved profile, captured with the UUID before sending.
+- Standard and LG custom values, exact target arguments, saved-profile reload/isolation, invalid values, and strict command output are tested with fake helpers.
+- Method changes and retry persist per UUID; changing methods resets custom values, and automatic/reset clears legacy manual preference.
+- No automatic input or power changes are run. Real-monitor input switching remains pending verification; no external monitor was connected at the previous check.
