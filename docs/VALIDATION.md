@@ -40,3 +40,11 @@
 - Standard and LG custom values, exact target arguments, saved-profile reload/isolation, invalid values, and strict command output are tested with fake helpers.
 - Method changes and retry persist per UUID; changing methods resets custom values, and automatic/reset clears legacy manual preference.
 - No automatic input or power changes are run. Real-monitor input switching remains pending verification; no external monitor was connected at the previous check.
+
+## 1.1.8 user-reported power-off policy
+
+- Initial/missing status is unverified. Unverified/not-working selects software disconnect; working selects DDC.
+- Status is user-entered and persisted per UUID and off value; on(1) cannot acquire off-support status.
+- EDID/discovery, command success/error, and readback never alter the support state. No automatic probing or fallback writes were added.
+- State roundtrip, mode/monitor isolation, reset to unknown and routing tests pass. Build/signature/DMG verification passed.
+- Physical DDC power-off and disconnect were not executed during this update; hardware verification remains pending.

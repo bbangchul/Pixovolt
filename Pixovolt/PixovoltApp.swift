@@ -204,7 +204,7 @@ struct ControlPanel: View {
                 Button("오픈소스 라이선스") { model.showLicense() }.buttonStyle(.link)
                 Spacer()
             }
-            Text("v1.1.7 · Apple Silicon · 실제 모니터 호환성 확인 필요")
+            Text("v1.1.8 · Apple Silicon · 실제 모니터 호환성 확인 필요")
                 .font(.system(size: 10)).foregroundStyle(.tertiary)
         }
         .padding(18)
@@ -227,10 +227,21 @@ struct ControlPanel: View {
                     }
                 }.padding(10).background(.orange.opacity(0.08), in: RoundedRectangle(cornerRadius: 8))
             } else {
-                Button("외부 화면 끄기 (Mac 연결 해제)") {
-                    confirmScreenOff = false
-                    confirmDisconnect = true
+                Button(model.defaultPowerOffRoute == .ddc ? "외부 화면 끄기 (DDC 전원)" : "외부 화면 끄기 (Mac 연결 해제)") {
+                    if model.defaultPowerOffRoute == .ddc {
+                        confirmDisconnect = false
+                        confirmScreenOff = true
+                    } else {
+                        confirmScreenOff = false
+                        confirmDisconnect = true
+                    }
                 }.disabled(model.busy || !model.hasSelectedMonitor)
+                if model.defaultPowerOffRoute == .ddc {
+                    Button("Mac 연결 해제로 끄기") {
+                        confirmScreenOff = false
+                        confirmDisconnect = true
+                    }.disabled(model.busy || !model.hasSelectedMonitor)
+                }
             }
             ForEach(model.disconnectedTargets.keys.sorted(), id: \.self) { target in
                 Button("\(model.disconnectedTargets[target] ?? "외부 화면") 다시 연결") { model.reconnect(target) }
@@ -238,20 +249,8 @@ struct ControlPanel: View {
             }
             Text("내장 화면이 켜져 있을 때만 해제합니다. 창이 노트북으로 이동하며 다른 본체로 입력이 전환될 수 있습니다.")
                 .font(.caption).foregroundStyle(.secondary)
-            DisclosureGroup("고급: DDC 전원 끄기 · 호환성 제한") {
-            Picker("끄기 방식", selection: Binding(get: { model.offMode }, set: { model.offMode = $0 })) {
-                ForEach(MonitorPower.offModes) { Text($0.label).tag($0) }
-            }.disabled(model.busy)
-            HStack {
-                Button {
-                    confirmDisconnect = false
-                    confirmScreenOff = true
-                } label: { Label("기존 DDC 전원 명령 전송", systemImage: "power") }
-                    .disabled(model.busy || !model.hasSelectedMonitor)
-                Button("DDC 켜기 시도") { model.setPower(.on) }
-                    .disabled(model.busy || (model.sleepingTargetID == nil && !model.hasSelectedMonitor))
-                Spacer()
-            }
+            Text("DDC 전원 끄기: \(model.ddcPowerStatus.label) · 기본: \(model.defaultPowerOffRoute == .ddc ? "DDC 전원" : "Mac 연결 해제")")
+                .font(.caption).foregroundStyle(.secondary)
             if confirmScreenOff {
                 VStack(alignment: .leading, spacing: 8) {
                     Text("선택 방식: \(model.offMode.label)").font(.caption.bold())
@@ -266,6 +265,25 @@ struct ControlPanel: View {
                     }
                 }.padding(10).background(.orange.opacity(0.08), in: RoundedRectangle(cornerRadius: 8))
             }
+            DisclosureGroup("고급: DDC 전원 끄기 · 호환성 제한") {
+            Picker("끄기 방식", selection: Binding(get: { model.offMode }, set: { model.offMode = $0 })) {
+                ForEach(MonitorPower.offModes) { Text($0.label).tag($0) }
+            }.disabled(model.busy)
+            Picker("직접 확인한 결과", selection: Binding(get: { model.ddcPowerStatus }, set: { model.recordPowerStatus($0) })) {
+                ForEach(DDCPowerStatus.allCases, id: \.rawValue) { Text($0.label).tag($0) }
+            }.disabled(model.busy || !model.hasSelectedMonitor)
+            Text("선택한 끄기 값별로 저장합니다. 실제 화면을 확인한 뒤 상태를 선택하세요. 상태 저장은 화면을 끄지 않습니다.")
+                .font(.caption).foregroundStyle(.secondary)
+            HStack {
+                Button {
+                    confirmDisconnect = false
+                    confirmScreenOff = true
+                } label: { Label("DDC 전원 끄기 수동 시도", systemImage: "power") }
+                    .disabled(model.busy || !model.hasSelectedMonitor)
+                Button("DDC 켜기 시도") { model.setPower(.on) }
+                    .disabled(model.busy || (model.sleepingTargetID == nil && !model.hasSelectedMonitor))
+                Spacer()
+            }
             Text("DDC 전원 제어는 일부 모니터에서 지원되지 않습니다. 작동하지 않으면 위의 Mac 연결 해제를 사용하세요.")
                 .font(.caption).foregroundStyle(.secondary)
             }
@@ -275,6 +293,11 @@ struct ControlPanel: View {
         .onChange(of: showSettings) { expanded in
             onHeightChange(expanded ? 740 : 690)
         }
+        .onChange(of: model.selectedID) { _ in
+            confirmDisconnect = false
+            confirmScreenOff = false
+        }
+        .onChange(of: model.offMode) { _ in confirmScreenOff = false }
         .onDisappear {
             confirmDisconnect = false
             confirmScreenOff = false

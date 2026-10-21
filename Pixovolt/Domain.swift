@@ -193,6 +193,31 @@ enum MonitorPower: Int, CaseIterable, Identifiable {
     }
 }
 
+// User observations only: EDID, command success and readback never confirm physical power-off.
+enum DDCPowerStatus: String, Codable, CaseIterable {
+    case unverified, working, notWorking
+    var label: String {
+        switch self {
+        case .unverified: return "미확인"
+        case .working: return "작동 확인"
+        case .notWorking: return "미작동 확인"
+        }
+    }
+    var defaultRoute: PowerOffRoute { self == .working ? .ddc : .disconnect }
+}
+enum PowerOffRoute { case ddc, disconnect }
+struct DDCPowerAssessment: Codable, Equatable {
+    private(set) var modes: [String: DDCPowerStatus] = [:]
+    func status(for mode: MonitorPower) -> DDCPowerStatus {
+        guard mode != .on else { return .unverified }
+        return modes[String(mode.rawValue)] ?? .unverified
+    }
+    mutating func record(_ status: DDCPowerStatus, for mode: MonitorPower) {
+        guard mode != .on else { return }
+        modes[String(mode.rawValue)] = status
+    }
+}
+
 enum PowerVerification: Equatable {
     case reported(MonitorPower)
     case unavailable

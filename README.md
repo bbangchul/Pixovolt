@@ -43,6 +43,12 @@
 - 화면 구성은 현재 로그인 세션에 적용합니다. 잠자기·덮개 개폐·재연결 후 macOS가 화면을 다시 추가할 수 있습니다.
 - 고급 설정의 DDC 전원 명령은 모니터 호환성에 따라 다릅니다. 개발에 사용된 LG 모니터에서는 끄기 값 2/3/4/5가 작동하지 않았습니다.
 
+### 끄기 방식 선택 (1.1.8)
+
+DDC 전원 끄기는 모니터 UUID와 끄기 값(2/3/4/5)별로 **미확인·작동 확인·미작동 확인**을 저장합니다. 초기값은 미확인이며, 미확인 또는 미작동이면 **Mac 연결 해제**가 기본입니다. 현재 끄기 값에서 작동 확인을 직접 저장한 경우에만 기본 버튼이 DDC 전원 끄기로 바뀝니다. Mac 연결 해제도 별도로 선택할 수 있습니다.
+
+고급 설정에서 끄기 값을 선택하고, 필요할 때 **DDC 전원 끄기 수동 시도**를 실행한 뒤 실제 화면을 확인하여 결과를 직접 저장하세요. 끄기 값이 바뀌면 그 값에 저장된 상태를 사용하며, 기록이 없으면 미확인입니다. 상태 변경·앱 시작·모니터 탐지는 전원 명령을 보내지 않습니다. EDID, 전송 성공, DDC 응답으로 작동 여부를 자동 판정하지 않습니다.
+
 ### 호환성
 
 - Apple Silicon Mac / macOS 13 이상. **Intel Mac은 지원하지 않습니다.**
@@ -177,3 +183,9 @@ Quit and remove Monitor Switch, then install Pixovolt. Monitor selection, LG mod
 메뉴바에 붙는 제어 팝업으로 복귀했습니다. 연결 해제·DDC 전원 명령의 확인은 팝업 내부의 실행/취소 버튼으로 처리하여 별도 확인창 때문에 팝업이 닫히는 문제를 피합니다. 최신 결과는 앱 상태에 남아 팝업을 다시 열어 확인할 수 있습니다.
 
 Controls now appear in a menu-bar popover instead of a standalone window. Disconnect and DDC power actions use inline confirmation buttons, avoiding focus changes to a separate alert. Results remain in application state after closing and reopening the popover.
+
+### Power-off selection (1.1.8)
+
+DDC power-off has three user-reported states: **unverified, working, not working**, saved per monitor UUID and off value (2/3/4/5). Unverified/not working defaults to Mac software disconnect. Only a manually recorded working result for the selected value makes DDC the default; software disconnect remains available.
+
+Choose an off value in advanced settings, optionally run the manual DDC attempt, inspect the actual screen, then record the result. Unknown values start unverified. Saving status, launch and discovery never issue a power command. EDID, command delivery and DDC readback do not automatically establish physical power-off support.

@@ -8,6 +8,28 @@ import Foundation
             for display in displays { print("uuid=\(display.uuid) builtIn=\(display.builtIn) active=\(display.active) online=\(display.online)") }
             return
         }
+        // Pure policy tests: recording observations must never execute a display command.
+        var assessment = DDCPowerAssessment()
+        for mode in MonitorPower.offModes {
+            precondition(assessment.status(for: mode) == .unverified)
+            for status in DDCPowerStatus.allCases {
+                assessment.record(status, for: mode)
+                precondition(assessment.status(for: mode) == status)
+                precondition(status.defaultRoute == (status == .working ? .ddc : .disconnect))
+            }
+        }
+        var isolated = DDCPowerAssessment()
+        isolated.record(.working, for: .off)
+        precondition(isolated.status(for: .standby) == .unverified)
+        isolated.record(.notWorking, for: .standby)
+        precondition(isolated.status(for: .off) == .working)
+        isolated.record(.working, for: .on)
+        precondition(isolated.status(for: .on) == .unverified)
+        let powerSaved = try JSONEncoder().encode([uuid: isolated])
+        let powerRestored = try JSONDecoder().decode([String: DDCPowerAssessment].self, from: powerSaved)
+        precondition(powerRestored[uuid] == isolated && powerRestored["another-monitor"] == nil)
+        isolated.record(.unverified, for: .off)
+        precondition(isolated.status(for: .off).defaultRoute == .disconnect)
         let internalDisplay = ConnectionDisplay(id: 1, uuid: "00000000-0000-0000-0000-000000000001", builtIn: true, active: true, online: true, physical: true)
         let externalDisplay = ConnectionDisplay(id: 2, uuid: uuid, builtIn: false, active: true, online: true, physical: true, vendor: 1000, model: 2000, serial: 3000)
         _ = try ConnectionPolicy.target(uuid: uuid, in: [internalDisplay, externalDisplay], enabling: false)
@@ -169,6 +191,6 @@ import Foundation
         catch { precondition(Date().timeIntervalSince(start) < 3) }
         let missing = DDCService(executable: temp.appendingPathComponent("missing"))
         do { _ = try await missing.run([]); fatalError("missing accepted") } catch {}
-        print("PASS: profile-based standard/LG execution for all five inputs, custom values, persisted profile reload and monitor isolation, argument validation and strict custom response, EDID validation/identity/naming/duplicate labels/profile precedence/per-device persistence/JSON schema, connection target/last-screen guard/built-in guard/duplicate rejection/fresh-ID recovery/ambiguous recovery rejection, power values 1-5, unchanged-on verification, standby verification, unavailable readback, LG default selection, power off/on arguments and execution, power failure, UUID validation, diagnostics, strict write result, parser, all 10 input mappings, UUID arguments, command success/failure, empty list, timeout termination, missing helper")
+        print("PASS: user-reported power status/routing/initial unknown/mode and monitor isolation/persistence/reset, profile-based standard/LG execution for all five inputs, custom values, persisted profile reload and monitor isolation, argument validation and strict custom response, EDID validation/identity/naming/duplicate labels/profile precedence/per-device persistence/JSON schema, connection target/last-screen guard/built-in guard/duplicate rejection/fresh-ID recovery/ambiguous recovery rejection, power values 1-5, unchanged-on verification, standby verification, unavailable readback, LG default selection, power off/on arguments and execution, power failure, UUID validation, diagnostics, strict write result, parser, all 10 input mappings, UUID arguments, command success/failure, empty list, timeout termination, missing helper")
     }
 }

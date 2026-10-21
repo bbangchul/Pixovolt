@@ -12,7 +12,21 @@ import Carbon
             let mode = MonitorPower(rawValue: powerModeIDs[selectedID] ?? 4) ?? .off
             return mode == .on ? .off : mode
         }
-        set { if newValue != .on { powerModeIDs[selectedID] = newValue.rawValue } }
+        set { if !busy, hasSelectedMonitor, newValue != .on { powerModeIDs[selectedID] = newValue.rawValue } }
+    }
+    @Published var powerAssessments: [String: DDCPowerAssessment] { didSet {
+        if let data = try? JSONEncoder().encode(powerAssessments) { defaults.set(data, forKey: "powerAssessments") }
+    } }
+    var ddcPowerStatus: DDCPowerStatus {
+        powerAssessments[selectedID]?.status(for: offMode) ?? .unverified
+    }
+    var defaultPowerOffRoute: PowerOffRoute { ddcPowerStatus.defaultRoute }
+    func recordPowerStatus(_ status: DDCPowerStatus) {
+        guard !busy, hasSelectedMonitor else { return }
+        var assessment = powerAssessments[selectedID] ?? DDCPowerAssessment()
+        assessment.record(status, for: offMode)
+        powerAssessments[selectedID] = assessment
+        message = "\(offMode.label): 직접 확인한 결과 ‘\(status.label)’를 이 모니터에 저장했습니다. 화면 명령은 보내지 않았습니다."
     }
     @Published var disconnectedTargets: [String: String] { didSet { defaults.set(disconnectedTargets, forKey: "disconnectedTargets") } }
     private var connectionIdentities: [String: ConnectionIdentity] { didSet {
@@ -103,6 +117,8 @@ import Carbon
     }
     init() {
         Self.migrateLegacyPreferences()
+        let powerData = UserDefaults.standard.data(forKey: "powerAssessments") ?? Data()
+        powerAssessments = (try? JSONDecoder().decode([String: DDCPowerAssessment].self, from: powerData)) ?? [:]
         let profiles = UserDefaults.standard.data(forKey: "profileOverrides") ?? Data()
         profileOverrides = (try? JSONDecoder().decode([String: UserProfileOverride].self, from: profiles)) ?? [:]
         disconnectedTargets = UserDefaults.standard.dictionary(forKey: "disconnectedTargets") as? [String: String] ?? [:]
