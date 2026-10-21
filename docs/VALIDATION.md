@@ -25,3 +25,11 @@
 - Release arm64 build, app signature and DMG checksum validation passed.
 - User confirmed the installed menu-bar popover opens correctly on 2026-10-21.
 - Physical disconnect/power operations were not triggered as part of this UI update.
+
+## 1.1.6 identity / profile preparation
+
+- New tests pass for EDID header/checksum, manufacturer/product/serial/name parsing, invalid EDID, fallback naming, stable duplicate labels, structured JSON version/UUID validation, profile precedence and per-UUID persistence.
+- Installed 1.1.5 and new helper both reported no external monitor. The user confirmed no monitor was connected; detailed live-device verification is pending connection.
+- JSON discovery with no connected monitor is represented as a successful empty display list. Legacy CLI text output is preserved.
+- New profile editing remains preparation-only: existing input/power/disconnect execution paths are not wired to it.
+- No automatic input, power or connection mutations were issued.

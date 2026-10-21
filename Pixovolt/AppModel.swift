@@ -4,7 +4,7 @@ import Carbon
 
 @MainActor final class AppModel: ObservableObject {
     @Published var monitors: [Monitor] = []
-    @Published var selectedID: String { didSet { defaults.set(selectedID, forKey: "selectedID") } }
+    @Published var selectedID: String { didSet { defaults.set(selectedID, forKey: "selectedID"); profileValidationError = nil } }
     @Published var alternateIDs: [String: Bool] { didSet { defaults.set(alternateIDs, forKey: "alternateIDs") } }
     @Published var powerModeIDs: [String: Int] { didSet { defaults.set(powerModeIDs, forKey: "powerModeIDs") } }
     var offMode: MonitorPower {
@@ -19,6 +19,44 @@ import Carbon
         if let data = try? JSONEncoder().encode(connectionIdentities) { defaults.set(data, forKey: "connectionIdentities") }
     } }
     private let connectionService = DisplayConnectionService()
+    @Published var profileOverrides: [String: UserProfileOverride] { didSet {
+        if let data = try? JSONEncoder().encode(profileOverrides) { defaults.set(data, forKey: "profileOverrides") }
+    } }
+    @Published var profileValidationError: String?
+    var selectedMonitor: Monitor? { monitors.first { $0.id == selectedID } }
+    func displayLabel(_ monitor: Monitor) -> String { DisplayNames.labels(monitors)[monitor.id] ?? monitor.displayName }
+    var preparedProfile: ResolvedProfile? {
+        guard let selectedMonitor else { return nil }
+        return ProfileResolver.resolve(selectedMonitor, user: profileOverrides[selectedID], legacyAlternate: alternateIDs[selectedID])
+    }
+    var profileChoice: String {
+        get { profileOverrides[selectedID]?.method?.rawValue ?? "automatic" }
+        set {
+            guard selectedMonitor != nil else { return }
+            var edit = profileOverrides[selectedID] ?? UserProfileOverride()
+            edit.method = ProfileMethod(rawValue: newValue)
+            // Values belong to a protocol. Explicit method changes discard old custom port values.
+            edit.inputValues = [:]
+            profileOverrides[selectedID] = edit
+            profileValidationError = nil
+        }
+    }
+    func setPreparedValue(_ input: InputSource, text: String) {
+        guard selectedMonitor != nil else { return }
+        guard let value = Int(text), (0...65535).contains(value) else {
+            profileValidationError = "입력 값은 0~65535의 정수여야 합니다. 저장하지 않았습니다."
+            return
+        }
+        var edit = profileOverrides[selectedID] ?? UserProfileOverride()
+        if edit.method == nil { edit.method = preparedProfile?.profile.method }
+        edit.inputValues[input.rawValue] = value
+        profileOverrides[selectedID] = edit
+        profileValidationError = nil
+    }
+    func resetPreparedProfile() {
+        profileOverrides.removeValue(forKey: selectedID)
+        profileValidationError = nil
+    }
     @Published var busy = false
     @Published var message = "입력 전환 후 현재 Mac의 화면 연결이 끊길 수 있습니다."
     @Published var error: String?
@@ -56,6 +94,8 @@ import Carbon
     }
     init() {
         Self.migrateLegacyPreferences()
+        let profiles = UserDefaults.standard.data(forKey: "profileOverrides") ?? Data()
+        profileOverrides = (try? JSONDecoder().decode([String: UserProfileOverride].self, from: profiles)) ?? [:]
         disconnectedTargets = UserDefaults.standard.dictionary(forKey: "disconnectedTargets") as? [String: String] ?? [:]
         let identityData = UserDefaults.standard.data(forKey: "connectionIdentities") ?? Data()
         connectionIdentities = (try? JSONDecoder().decode([String: ConnectionIdentity].self, from: identityData)) ?? [:]
@@ -141,7 +181,7 @@ import Carbon
     func diagnose() {
         guard !busy, hasSelectedMonitor else { return }
         let target = selectedID
-        let name = monitors.first { $0.id == target }?.name ?? "모니터"
+        let name = monitors.first { $0.id == target }?.displayName ?? "모니터"
         busy = true
         Task {
             defer { finishOperation() }
@@ -183,7 +223,7 @@ import Carbon
     func disconnectSelected() {
         guard !busy, hasSelectedMonitor else { return }
         let target = selectedID
-        let name = monitors.first { $0.id == target }?.name ?? "외부 모니터"
+        let name = monitors.first { $0.id == target }?.displayName ?? "외부 모니터"
         busy = true
         error = nil
         Task {

@@ -92,9 +92,44 @@ struct ControlPanel: View {
                         Text("저장된 모니터 연결 끊김").tag(model.selectedID)
                     }
                     ForEach(model.monitors) { monitor in
-                        Text("\(monitor.name) · \(monitor.id.prefix(8))").tag(monitor.id)
+                        Text(model.displayLabel(monitor)).tag(monitor.id)
                     }
                 }.disabled(model.busy)
+                if let monitor = model.selectedMonitor, let prepared = model.preparedProfile {
+                    DisclosureGroup("모니터 정보 · 제어 프로필") {
+                        VStack(alignment: .leading, spacing: 8) {
+                            Text(monitor.displayName).font(.subheadline.bold())
+                            Text("제조사: \(monitor.manufacturerName) · 제품: \(monitor.resolvedProductID.map { String(format: "%04X", $0) } ?? "알 수 없음")")
+                                .font(.caption).textSelection(.enabled)
+                            Text("모델 식별: \(monitor.modelKey ?? "정보 부족")\n장치 UUID: \(monitor.id)")
+                                .font(.caption.monospaced()).textSelection(.enabled)
+                            if let serial = Monitor.cleanName(monitor.serialText) {
+                                Text("일련번호: \(serial)").font(.caption).textSelection(.enabled)
+                            } else if let serial = monitor.edid?.serialNumber ?? monitor.serialNumber, serial != 0 {
+                                Text("일련번호: \(serial)").font(.caption).textSelection(.enabled)
+                            }
+                            Text(monitor.edid != nil ? "EDID 기본 블록 검증됨" : monitor.edidData == nil || monitor.edidData?.isEmpty == true ? "원본 EDID 미제공 · 시스템 식별 정보 사용" : "EDID 검증 실패 · 시스템 식별 정보 사용")
+                                .font(.caption).foregroundStyle(.secondary)
+                            if let edidID = Monitor.cleanName(monitor.edidUUID) {
+                                Text("EDID 식별자: \(edidID)").font(.caption.monospaced()).textSelection(.enabled)
+                            }
+                            Divider()
+                            Text("준비된 프로필: \(prepared.profile.method.label)").font(.caption.bold())
+                            Text("선택 근거: \(prepared.source)").font(.caption).foregroundStyle(.secondary)
+                            Picker("프로필 방식", selection: Binding(get: { model.profileChoice }, set: { model.profileChoice = $0 })) {
+                                Text("자동 선택").tag("automatic")
+                                ForEach(ProfileMethod.allCases, id: \.rawValue) { Text($0.label).tag($0.rawValue) }
+                            }.disabled(model.busy)
+                            ForEach(InputSource.allCases) { input in
+                                PreparedInputRow(input: input, value: prepared.profile.value(input)) { model.setPreparedValue(input, text: $0) }
+                            }
+                            if let warning = model.profileValidationError { Text(warning).font(.caption).foregroundStyle(.orange) }
+                            Button("새 프로필 수정 초기화") { model.resetPreparedProfile() }.disabled(model.busy)
+                            Text("프로필은 확인·저장 단계입니다. 입력 전환 버튼에는 아직 적용하지 않으며 기존 LG 옵션과 전송 동작은 유지됩니다. EDID로 전원 제어 지원 여부를 판단하지 않습니다.")
+                                .font(.caption).foregroundStyle(.secondary)
+                        }.padding(.top, 8).id(monitor.id)
+                    }
+                }
                 ForEach(Array(InputSource.allCases.enumerated()), id: \.element.id) { index, input in
                     Button { model.switchInput(input) } label: {
                         HStack {
@@ -169,7 +204,7 @@ struct ControlPanel: View {
                 Button("오픈소스 라이선스") { model.showLicense() }.buttonStyle(.link)
                 Spacer()
             }
-            Text("v1.1.5 · Apple Silicon · 실제 모니터 호환성 확인 필요")
+            Text("v1.1.6 · Apple Silicon · 실제 모니터 호환성 확인 필요")
                 .font(.system(size: 10)).foregroundStyle(.tertiary)
         }
         .padding(18)
@@ -245,5 +280,24 @@ struct ControlPanel: View {
             confirmScreenOff = false
         }
         .onAppear { model.updateLoginStatus(); model.refresh() }
+    }
+}
+
+struct PreparedInputRow: View {
+    let input: InputSource
+    let value: Int
+    let onSave: (String) -> Void
+    @State private var draft = ""
+    var body: some View {
+        HStack {
+            Text(input.rawValue).font(.caption)
+            Spacer()
+            TextField("값", text: $draft).frame(width: 75)
+                .onSubmit { onSave(draft) }
+                .accessibilityLabel("\(input.rawValue) 프로필 값")
+            Button("저장") { onSave(draft) }.controlSize(.small)
+        }
+        .onAppear { draft = String(value) }
+        .onChange(of: value) { draft = String($0) }
     }
 }

@@ -52,6 +52,14 @@
 - 연결 제어와 DDC는 비공개 macOS API에 의존합니다. 향후 OS 업데이트와 모든 기기 조합의 호환성을 보장하지 않습니다.
 - 단일 사용자 환경에서 작동 피드백을 받았으며, 전체 기기·기능 검증표는 아직 없습니다. [검증 기록](docs/VALIDATION.md)을 참고하세요.
 
+### 모니터 정보·프로필 준비 (1.1.6)
+
+모니터 정보를 JSON으로 읽고 제조사·제품 코드·일련번호·EDID 식별자 및 원본 EDID(제공되는 경우)를 수집합니다. 원본 EDID 기본 블록은 헤더와 체크섬을 확인한 뒤 사용하며, 없거나 유효하지 않으면 시스템이 제공한 식별 정보를 사용합니다. 이름이 없으면 제조사와 제품 코드로 표시하고 같은 이름의 모니터는 구분 번호를 붙입니다.
+
+대상 모니터 아래 **모니터 정보 · 제어 프로필**에서 준비된 프로필과 선택 근거를 확인합니다. 선택 순서는 **사용자 저장 설정 → 모델 프로필 → 제조사 기본값 → 일반 DDC**입니다. 기존 LG 수동 설정은 사용자 설정으로 보존합니다. 일반/LG 방식과 입력별 값을 UUID별로 저장할 수 있으며, 입력 값은 0~65535만 허용합니다.
+
+**이번 단계는 식별·표시·프로필 준비까지입니다. 저장한 새 프로필 값은 아직 실제 입력 전환 버튼에 연결하지 않았습니다.** 현재 입력 전환은 기존 LG 옵션과 값을 계속 사용합니다. 자동 전환이나 전원 시험은 실행하지 않으며 EDID만으로 DDC 전원 지원을 판단하지 않습니다. 현재 모델 카탈로그는 기존 LG 환경용 설정 한 개와 제조사/일반 기본값으로 시작하며, 모든 모델을 지원한다고 가정하지 않습니다.
+
 ### 소스에서 빌드
 
 Xcode와 Python 3가 필요합니다. 개발 환경은 Xcode 26.2 / Swift 6.2.3이며 Swift 5 언어 모드와 macOS 13 최소 대상을 사용합니다. Homebrew·XcodeGen·추가 패키지 설치는 필요하지 않습니다.
@@ -127,6 +135,14 @@ The application UI is currently in Korean.
 - USB-C uses value 27 in standard mode or 210 in LG alternate mode; these values may differ between models.
 - Display connection control and DDC depend on private macOS APIs and may break after OS updates.
 - Successful use was reported in one user's environment, not across a complete device/feature matrix. See the [validation record](docs/VALIDATION.md).
+
+### Identity and profile preparation (1.1.6)
+
+Structured JSON discovery collects manufacturer/product IDs, serial information, EDID identity and raw EDID when available. The EDID base block header/checksum are validated; system metadata is used when raw EDID is absent or invalid. Missing model names fall back to manufacturer/product labels, and duplicate display names receive distinct numbers.
+
+Expand **모니터 정보 · 제어 프로필** (Monitor information / Control profile) to inspect the prepared profile and selection reason. Precedence is **saved user settings → exact model profile → manufacturer default → standard DDC**. Legacy LG preferences retain user priority. Preview method and input values are saved per UUID, with values restricted to 0–65535.
+
+**This stage only prepares identity, labels and profiles. New saved profile values are not yet connected to the input-switching buttons.** Existing LG options and sending behavior remain unchanged. No input/power tests run automatically; EDID alone does not establish DDC power support. The initial catalog has one configuration preset for the original LG setup, plus manufacturer/general defaults—not a complete supported-model database.
 
 ### Build from source
 

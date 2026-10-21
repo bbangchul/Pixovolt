@@ -101,6 +101,32 @@ static void printDisplayInfos(DisplayInfos *display, int nbDisplays, bool detail
     }
 }
 
+// Structured read-only display metadata for Pixovolt. Existing CLI output remains unchanged.
+static NSString *safeDisplayString(id value) {
+    return [value isKindOfClass:[NSString class]] ? value : @"";
+}
+static void printDisplayJSON(DisplayInfos *displays, int count) {
+    NSMutableArray *items = [NSMutableArray array];
+    for (int i = 0; i < count; i++) {
+        DisplayInfos *display = displays + i;
+        [items addObject:@{
+            @"uuid": safeDisplayString(display->uuid),
+            @"name": safeDisplayString(display->productName),
+            @"manufacturer": safeDisplayString(display->manufacturer),
+            @"vendorID": @(display->vendor),
+            @"productID": @(display->model),
+            @"serialNumber": @(display->serial),
+            @"serialText": safeDisplayString(display->alphNumSerial),
+            @"edidUUID": safeDisplayString(display->edid),
+            @"edidBase64": display->edidData ? [display->edidData base64EncodedStringWithOptions:0] : @""
+        }];
+    }
+    NSError *error = nil;
+    NSData *data = [NSJSONSerialization dataWithJSONObject:@{@"schemaVersion": @1, @"displays": items} options:NSJSONWritingSortedKeys error:&error];
+    if (data == nil) { writeToStdOut(@"Could not encode display metadata\n"); return; }
+    writeToStdOut([[[NSString alloc] initWithData:data encoding:NSUTF8StringEncoding] autorelease]);
+}
+
 // Function to handle the reading operation (get, max, chg)
 static DDCValue readingOperation(DDCTransport *transport, DDCPacket *packet) {
     DDCValue dummyAttr = {-1, -1};
@@ -197,13 +223,18 @@ int main(int argc, char** argv) {
 
         int connectedDisplays = getOnlineDisplayInfos(displayInfos);
         if (connectedDisplays == 0) {
+            if (argc >= 3 && STR_EQ(argv[1], "list") && STR_EQ(argv[2], "json")) {
+                printDisplayJSON(displayInfos, 0);
+                return EXIT_SUCCESS;
+            }
             writeToStdOut(@"No external display found, aborting");
             return EXIT_FAILURE;
         }
 
         // Printing out display list
         if (STR_EQ(argv[1], "list") || STR_EQ(argv[1], "l")) {
-            printDisplayInfos(displayInfos, connectedDisplays, (argc >= 3 && (STR_EQ(argv[2], "detailed") || STR_EQ(argv[2], "d"))));
+            if (argc >= 3 && STR_EQ(argv[2], "json")) { printDisplayJSON(displayInfos, connectedDisplays); }
+            else { printDisplayInfos(displayInfos, connectedDisplays, (argc >= 3 && (STR_EQ(argv[2], "detailed") || STR_EQ(argv[2], "d")))); }
             return EXIT_SUCCESS;
         }
 

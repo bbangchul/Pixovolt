@@ -37,9 +37,9 @@ static Boolean isMCDP29XXProxy(io_service_t proxy) {
 
 CGDisplayCount getOnlineDisplayInfos(DisplayInfos* displayInfos) {
     // Getting online display list and count
-    CGDisplayCount screenCount;
+    CGDisplayCount screenCount = 0;
     CGDirectDisplayID screenList[MAX_DISPLAYS];
-    CGGetOnlineDisplayList(MAX_DISPLAYS, screenList, &screenCount);
+    if (CGGetOnlineDisplayList(MAX_DISPLAYS, screenList, &screenCount) != kCGErrorSuccess) { return 0; }
 
     int validDisplayCount = 0;
     // Fetching each display infos from IOKit
@@ -76,6 +76,16 @@ CGDisplayCount getOnlineDisplayInfos(DisplayInfos* displayInfos) {
 
         // If successful, we can retrieve the EDID UUID, and other display attributes
         currDisplay->edid = getCFStringRef(currDisplay->adapter, "EDID UUID");
+        CFTypeRef rawEDID = CFDictionaryGetValue(displayInfoDict, CFSTR("IODisplayEDID"));
+        if (rawEDID == NULL || CFGetTypeID(rawEDID) != CFDataGetTypeID()) {
+            rawEDID = getCFStringRef(currDisplay->adapter, "IODisplayEDID");
+        }
+        if (rawEDID == NULL || CFGetTypeID(rawEDID) != CFDataGetTypeID()) {
+            rawEDID = getCFStringRef(currDisplay->adapter, "EDID");
+        }
+        if (rawEDID != NULL && CFGetTypeID(rawEDID) == CFDataGetTypeID()) {
+            currDisplay->edidData = (NSData *)rawEDID;
+        }
         CFDictionaryRef displayAttrs = getCFStringRef(currDisplay->adapter, "DisplayAttributes");
         if (displayAttrs) {
             NSDictionary* displayAttrsNS = (NSDictionary*)displayAttrs;

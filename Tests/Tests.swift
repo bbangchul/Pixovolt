@@ -19,6 +19,61 @@ import Foundation
         precondition(recovered.id == 9)
         do { _ = try ConnectionPolicy.target(uuid: uuid, in: [offline, offline], enabling: true, fallback: externalDisplay.identity); fatalError("ambiguous fallback accepted") } catch {}
         do { _ = try ConnectionPolicy.target(uuid: "not-a-uuid", in: [internalDisplay, externalDisplay], enabling: true); fatalError("bad identity accepted") } catch {}
+        // Identity, fallback naming, stable duplicate names and per-device profile precedence.
+        var edid = [UInt8](repeating: 0, count: 128)
+        edid.replaceSubrange(0..<8, with: [0,255,255,255,255,255,255,0])
+        edid[8] = 0x1E; edid[9] = 0x6D; edid[10] = 0x50; edid[11] = 0x77
+        edid[12] = 42; edid[57] = 0xFC
+        let descriptor = Array("Test Panel\n".utf8)
+        edid.replaceSubrange(59..<(59+descriptor.count), with: descriptor)
+        edid[127] = UInt8((256 - edid.prefix(127).reduce(0, { ($0 + Int($1)) & 255 })) & 255)
+        let parsedEDID = EDIDIdentity.parse(Data(edid))!
+        precondition(parsedEDID.manufacturerCode == "GSM" && parsedEDID.productID == 0x7750)
+        precondition(parsedEDID.serialNumber == 42 && parsedEDID.modelName == "Test Panel")
+        var corrupt = edid; corrupt[127] ^= 1
+        precondition(EDIDIdentity.parse(Data(corrupt)) == nil)
+        precondition(EDIDIdentity.parse(Data([0,1])) == nil)
+        let identified = Monitor(id: uuid, name: "Unknown Display", vendorID: 0x1E6D, productID: 0x7750, edidData: Data(edid))
+        precondition(identified.displayName == "Test Panel" && identified.modelKey == "1E6D:7750")
+        let mismatched = Monitor(id: uuid, name: "System Panel", vendorID: 1234, productID: 5678, edidData: Data(edid))
+        precondition(mismatched.edid == nil && mismatched.modelKey == "04D2:162E" && mismatched.displayName == "System Panel")
+        let unnamed = Monitor(id: uuid, name: "(null)", manufacturerCode: "GSM", vendorID: 0x1E6D, productID: 0x7750)
+        precondition(unnamed.displayName == "LG · 제품 7750")
+        let unknown = Monitor(id: uuid, name: "", vendorID: 1234, productID: 5678)
+        precondition(unknown.displayName.contains("04D2") && unknown.displayName.contains("162E"))
+        precondition(Monitor(id: uuid, name: "").displayName == "외부 모니터")
+        let twin = Monitor(id: "00000000-0000-0000-0000-000000000003", name: "(null)", manufacturerCode: "GSM", vendorID: 0x1E6D, productID: 0x7750)
+        let labels = DisplayNames.labels([unnamed, twin])
+        precondition(labels[uuid] != labels[twin.id])
+        precondition(labels == DisplayNames.labels([twin, unnamed]))
+        let exact = ProfileResolver.resolve(identified)
+        precondition(exact.source.contains("모델 프로필") && exact.profile.method == .lgAlternate)
+        let maker = ProfileResolver.resolve(Monitor(id: uuid, name: "Panel", manufacturerCode: "GSM", vendorID: 0x1E6D, productID: 1))
+        precondition(maker.source.contains("제조사 기본값") && maker.profile.value(.hdmi1) == 144)
+        precondition(ProfileResolver.resolve(unknown).profile.method == .standard)
+        let customModel = ControlProfile(method: .standard, inputValues: [InputSource.hdmi1.rawValue: 99])
+        let modelResolution = ProfileResolver.resolve(identified, models: ["1E6D:7750": customModel])
+        precondition(modelResolution.profile.value(.hdmi1) == 99)
+        let legacy = ProfileResolver.resolve(identified, legacyAlternate: false)
+        precondition(legacy.profile.method == .standard && legacy.profile.value(.hdmi1) == 17)
+        let override = UserProfileOverride(method: .standard, inputValues: ["HDMI 1": 33, "USB-C": -1, "unknown": 1])
+        let custom = ProfileResolver.resolve(identified, user: override, legacyAlternate: true)
+        precondition(custom.source == "사용자 저장 설정" && custom.profile.value(.hdmi1) == 33 && custom.profile.value(.usbC) == 27)
+        let savedOverrides = [uuid: override]
+        let restored = try JSONDecoder().decode([String: UserProfileOverride].self, from: JSONEncoder().encode(savedOverrides))
+        precondition(restored == savedOverrides && restored[twin.id] == nil)
+        let json = """
+        {"schemaVersion":1,"displays":[{"uuid":"\(uuid)","name":"Panel (A)\\nB","manufacturer":"GSM","vendorID":7789,"productID":30544,"edidBase64":"\(Data(edid).base64EncodedString())"}]}
+        """
+        let jsonMonitors = try JSONDisplayParser.parse(json)
+        precondition(jsonMonitors.count == 1 && jsonMonitors[0].edid?.modelName == "Test Panel")
+        let emptyJSON = try JSONDisplayParser.parse("{\"schemaVersion\":1,\"displays\":[]}")
+        precondition(emptyJSON.isEmpty)
+        do { _ = try JSONDisplayParser.parse("{\"schemaVersion\":2,\"displays\":[]}"); fatalError("unsupported schema accepted") } catch {}
+        do { _ = try JSONDisplayParser.parse("{\"schemaVersion\":1,\"displays\":[{\"uuid\":\"bad\"}]}"); fatalError("bad identity accepted") } catch {}
+        let duplicateJSON = "{\"schemaVersion\":1,\"displays\":[{\"uuid\":\"\(uuid)\"},{\"uuid\":\"\(uuid)\"}]}"
+        do { _ = try JSONDisplayParser.parse(duplicateJSON); fatalError("duplicate JSON identity accepted") } catch {}
+
         let listed = DisplayParser.parse("[1] LG (UltraFine) (\(uuid))\n - Display ID: 1\n[2] Bad (not-a-uuid)")
         precondition(listed == [Monitor(id: uuid, name: "LG (UltraFine)")])
         precondition(DisplayParser.parse("").isEmpty)
@@ -71,6 +126,9 @@ import Foundation
         let report = try await success.diagnostics(uuid: uuid)
         precondition(report.contains("get luminance:"))
         precondition(report.contains("get input-alt:"))
+        let emptyStructured = try fixture("empty-json", "echo '{\"schemaVersion\":1,\"displays\":[]}'\n")
+        let structuredDisplays = try await emptyStructured.displays()
+        precondition(structuredDisplays.isEmpty)
         let empty = try fixture("empty", "echo 'No external display found, aborting'\nexit 1\n")
         let displays = try await empty.displays()
         precondition(displays.isEmpty)
@@ -80,6 +138,6 @@ import Foundation
         catch { precondition(Date().timeIntervalSince(start) < 3) }
         let missing = DDCService(executable: temp.appendingPathComponent("missing"))
         do { _ = try await missing.run([]); fatalError("missing accepted") } catch {}
-        print("PASS: connection target/last-screen guard/built-in guard/duplicate rejection/fresh-ID recovery/ambiguous recovery rejection, power values 1-5, unchanged-on verification, standby verification, unavailable readback, LG default selection, power off/on arguments and execution, power failure, UUID validation, diagnostics, strict write result, parser, all 10 input mappings, UUID arguments, command success/failure, empty list, timeout termination, missing helper")
+        print("PASS: EDID validation/identity/naming/duplicate labels/profile precedence/per-device persistence/JSON schema, connection target/last-screen guard/built-in guard/duplicate rejection/fresh-ID recovery/ambiguous recovery rejection, power values 1-5, unchanged-on verification, standby verification, unavailable readback, LG default selection, power off/on arguments and execution, power failure, UUID validation, diagnostics, strict write result, parser, all 10 input mappings, UUID arguments, command success/failure, empty list, timeout termination, missing helper")
     }
 }

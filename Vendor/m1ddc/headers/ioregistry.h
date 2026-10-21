@@ -4,7 +4,7 @@
 # import <CoreGraphics/CoreGraphics.h>
 
 # ifndef MAX_DISPLAYS
-#  define MAX_DISPLAYS   4   // Set this to 2 or 4 depending on the Apple Silicon Mac you're using
+#  define MAX_DISPLAYS   64   // Set this to 2 or 4 depending on the Apple Silicon Mac you're using
 # endif
 
 # define UUID_SIZE      37
@@ -29,6 +29,7 @@ typedef struct
     NSString *ioLocation;
     NSString *uuid;
     NSString *edid;
+    NSData *edidData;
     NSString *productName;
     NSString *manufacturer;
     NSString *alphNumSerial;
